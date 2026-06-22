@@ -1,3 +1,5 @@
+import re
+
 from mcp.server.fastmcp import FastMCP
 from playwright.async_api import TimeoutError as PlaywrightTimeout
 from playwright.async_api import async_playwright
@@ -7,9 +9,38 @@ mcp = FastMCP("weather-Israel")
 
 FORECAST_URL = "https://www.weather2day.co.il/forecast"
 
+# Candidate selectors for the main forecast container, tried in order. The page
+# is JS-rendered and its markup may change, so we probe a few likely containers
+# and fall back to the whole <body> if none match.
+FORECAST_CONTAINER_SELECTORS = [
+    "main",
+    "#forecast",
+    ".forecast",
+    "#content",
+]
+
+# Cap the returned text so a noisy page cannot blow up the LLM context window.
+MAX_FORECAST_CHARS = 6000
+
 playwright = None
 browser = None
 page = None
+
+
+def _clean_text(raw: str) -> str:
+    """Strip noise from scraped page text so the LLM gets clean forecast data.
+
+    Trims each line, drops blank lines, collapses repeated whitespace, and caps
+    the total length at MAX_FORECAST_CHARS.
+    """
+    lines = [line.strip() for line in raw.splitlines()]
+    lines = [line for line in lines if line]
+    text = "\n".join(lines)
+    # Collapse runs of spaces/tabs left inside lines.
+    text = re.sub(r"[ \t]{2,}", " ", text)
+    if len(text) > MAX_FORECAST_CHARS:
+        text = text[:MAX_FORECAST_CHARS].rstrip() + "\n...[truncated]"
+    return text
 
 @mcp.tool()
 async def open_weather_forecast_israel() -> str:
@@ -86,7 +117,8 @@ async def select_weather_forecast_city_israel() -> str:
     Clicks the first item in the forecast autocomplete dropdown, which
     navigates the page to that location's forecast. Requires that
     enter_weather_forecast_city_israel() was called first so that
-    suggestions are present.
+    suggestions are present. Afterwards, call
+    extract_weather_forecast_israel() to read the forecast content.
 
     Returns:
         A status message with the selected item and the resulting URL.
@@ -108,6 +140,49 @@ async def select_weather_forecast_city_israel() -> str:
     except PlaywrightTimeout:
         return "No city suggestion available to select."
 
+
+@mcp.tool()
+async def extract_weather_forecast_israel() -> str:
+    """Read and clean the text of the currently open Israel forecast page.
+
+    This is step 4 of the Israel weather flow. It must be called after
+    select_weather_forecast_city_israel() so that the page is on a specific
+    city's forecast. It scrapes the forecast container, cleans noise out of the
+    text, and returns it so the model can answer the user's question from real
+    page content.
+
+    Returns:
+        The cleaned forecast text, or an error message if the page is not open.
+    """
+    global page
+
+    if page is None:
+        return "Error: Weather forecast page is not open. Please call open_weather_forecast_israel() first."
+
+    # Make sure the forecast finished loading before scraping.
+    try:
+        await page.wait_for_load_state("networkidle", timeout=10000)
+    except PlaywrightTimeout:
+        pass
+
+    raw = None
+    for selector in FORECAST_CONTAINER_SELECTORS:
+        try:
+            locator = page.locator(selector).first
+            raw = await locator.inner_text(timeout=3000)
+            if raw and raw.strip():
+                break
+        except PlaywrightTimeout:
+            continue
+        except Exception:
+            continue
+
+    # Fall back to the whole body if no targeted container matched.
+    if not raw or not raw.strip():
+        raw = await page.inner_text("body")
+
+    cleaned = _clean_text(raw)
+    return f"Weather forecast page content ({page.url}):\n\n{cleaned}"
 
 
 def main():

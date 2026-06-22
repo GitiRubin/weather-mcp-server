@@ -12,6 +12,21 @@ from client import MCPClient
 from dotenv import load_dotenv
 
 load_dotenv()
+EXIT_WORDS_HE = {"יציאה", "סיום", "צא"}
+EXIT_WORDS_EN = {"exit", "quit"}
+
+
+SYSTEM_PROMPT = (
+    "You are a helpful weather assistant with access to tools. "
+    "Use the tools to gather real data before answering. "
+    "When a tool returns the content of a weather forecast page, base your "
+    "answer strictly on that content - do not invent numbers or details that "
+    "are not present. Always reply in the same language as the user's question, "
+    "regardless of the language of the page content (for example, if the user "
+    "asks in English but the forecast page is in Hebrew, answer in English). "
+    "Give a concise, well-phrased summary of the forecast rather than a "
+    "description of the tool calls you made."
+)
 
 
 class ChatHost:
@@ -101,7 +116,10 @@ class ChatHost:
 
     async def process_query(self, query: str) -> str:
         """Process a query using OpenAI and available tools"""
-        messages = [{"role": "user", "content": query}]
+        messages = [
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "user", "content": query},
+        ]
         available_tools = await self.get_available_tools()
         tools = self._build_openai_tools(available_tools)
         final_text: list[str] = []
@@ -111,7 +129,7 @@ class ChatHost:
                 model="gpt-4o-mini",
                 messages=messages,
                 tools=tools,
-                max_tokens=1000,
+                max_tokens=2000,
                 temperature=0,
             )
 
@@ -161,15 +179,21 @@ class ChatHost:
     async def chat_loop(self):
         """Run an interactive chat loop"""
         print("\nMCP Client Started!")
-        print("Type your queries or 'quit' to exit.")
+        print("Type your request, or type 'exit' / 'יציאה' to quit")
         
         while True:
             try:
                 query = input("\nQuery: ").strip()
-                
-                if query.lower() == 'quit':
+                normalized_input = query.lower()
+
+                if query in EXIT_WORDS_HE:
+                    print("להתראות!")
                     break
-                
+
+                if normalized_input in EXIT_WORDS_EN:
+                    print("Goodbye!")
+                    break
+                    
                 response = await self.process_query(query)
                 print("\n" + response)
                 
