@@ -4,6 +4,7 @@ import asyncio
 import json
 import os
 from contextlib import AsyncExitStack
+from dataclasses import dataclass, field
 from typing import Any
 
 import openai
@@ -14,6 +15,15 @@ from dotenv import load_dotenv
 load_dotenv()
 EXIT_WORDS_HE = {"יציאה", "סיום", "צא"}
 EXIT_WORDS_EN = {"exit", "quit"}
+
+
+@dataclass
+class QueryResult:
+    """Structured result of a query: the model's final answer plus the MCP tool
+    calls that were made along the way (for UI visualization)."""
+
+    answer: str
+    tool_calls: list[dict] = field(default_factory=list)  # [{"name": str, "args": dict}]
 
 
 SYSTEM_PROMPT = (
@@ -35,6 +45,9 @@ class ChatHost:
         self.tool_clients: dict[str, tuple[MCPClient, str]] = {}
         self.clients_connected = False
         self.exit_stack = AsyncExitStack()
+        # Serialize queries: MCP sessions and the global Playwright page state in
+        # weather_Israel.py are stateful and not safe to drive concurrently.
+        self.query_lock = asyncio.Lock()
 
         self.openai = openai.OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
@@ -114,15 +127,24 @@ class ChatHost:
                 return "\n".join(parts)
         return json.dumps(content, default=str)
 
-    async def process_query(self, query: str) -> str:
-        """Process a query using OpenAI and available tools"""
+    async def process_query(self, query: str) -> QueryResult:
+        """Process a query using OpenAI and available tools.
+
+        Returns a QueryResult with the model's final answer and the list of MCP
+        tool calls made along the way (so a UI can show them separately).
+        """
+        async with self.query_lock:
+            return await self._process_query(query)
+
+    async def _process_query(self, query: str) -> QueryResult:
         messages = [
             {"role": "system", "content": SYSTEM_PROMPT},
             {"role": "user", "content": query},
         ]
         available_tools = await self.get_available_tools()
         tools = self._build_openai_tools(available_tools)
-        final_text: list[str] = []
+        answer_parts: list[str] = []
+        tool_calls_made: list[dict] = []
 
         while True:
             response = self.openai.chat.completions.create(
@@ -141,7 +163,7 @@ class ChatHost:
             assistant_content = assistant_message.content
 
             if assistant_content:
-                final_text.append(assistant_content)
+                answer_parts.append(assistant_content)
 
             if not tool_calls:
                 break
@@ -166,7 +188,7 @@ class ChatHost:
 
                 result = await client.session.call_tool(original_tool_name, tool_args)
                 tool_response = self._extract_tool_text(result.content)
-                final_text.append(f"[Calling tool {tool_name} with args {tool_args}]")
+                tool_calls_made.append({"name": tool_name, "args": tool_args})
 
                 messages.append({
                     "role": "tool",
@@ -174,8 +196,8 @@ class ChatHost:
                     "content": tool_response,
                 })
 
-        return "\n".join(final_text)
-    
+        return QueryResult(answer="\n".join(answer_parts), tool_calls=tool_calls_made)
+
     async def chat_loop(self):
         """Run an interactive chat loop"""
         print("\nMCP Client Started!")
@@ -194,9 +216,12 @@ class ChatHost:
                     print("Goodbye!")
                     break
                     
-                response = await self.process_query(query)
-                print("\n" + response)
-                
+                result = await self.process_query(query)
+                if result.tool_calls:
+                    tool_names = ", ".join(call["name"] for call in result.tool_calls)
+                    print(f"\n[Tools used: {tool_names}]")
+                print("\n" + result.answer)
+
             except Exception as e:
                 print(f"\nchat_loop Error: {str(e)}")
                 

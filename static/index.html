@@ -1,0 +1,387 @@
+<!doctype html>
+<html lang="he">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>שמאי החזאי 🌤️</title>
+  <style>
+    :root {
+      --bot-bg: rgba(255, 255, 255, 0.92);
+      --user-bg: linear-gradient(135deg, #5b8def, #6f6ff0);
+      --ink: #2b2f45;
+      --muted: #6b7392;
+      --chip: rgba(91, 141, 239, 0.14);
+      --chip-ink: #3552a8;
+    }
+
+    * { box-sizing: border-box; }
+
+    html, body {
+      height: 100%;
+      margin: 0;
+    }
+
+    body {
+      font-family: "Segoe UI", "Heebo", system-ui, -apple-system, sans-serif;
+      color: var(--ink);
+      overflow: hidden;
+      /* Animated sky gradient that drifts through the day. */
+      background: linear-gradient(180deg, #8ec5ff 0%, #b8d9ff 40%, #e7f1ff 100%);
+      background-size: 100% 220%;
+      animation: sky 24s ease-in-out infinite alternate;
+    }
+
+    @keyframes sky {
+      0%   { background-position: 0% 0%; }
+      100% { background-position: 0% 100%; }
+    }
+
+    /* ---- Sun ---- */
+    .sun {
+      position: fixed;
+      top: 7%;
+      inset-inline-end: 10%;
+      width: 90px;
+      height: 90px;
+      border-radius: 50%;
+      background: radial-gradient(circle at 50% 50%, #fff3b0, #ffd64d 60%, #ffc107);
+      box-shadow: 0 0 60px 20px rgba(255, 214, 77, 0.55);
+      animation: pulse 6s ease-in-out infinite;
+      z-index: 0;
+    }
+
+    @keyframes pulse {
+      0%, 100% { transform: scale(1); }
+      50%      { transform: scale(1.08); }
+    }
+
+    /* ---- Drifting clouds ---- */
+    .cloud {
+      position: fixed;
+      background: #fff;
+      border-radius: 100px;
+      opacity: 0.9;
+      filter: blur(0.4px);
+      z-index: 0;
+      animation: drift linear infinite;
+    }
+    .cloud::before, .cloud::after {
+      content: "";
+      position: absolute;
+      background: #fff;
+      border-radius: 50%;
+    }
+    .cloud::before { width: 55%; height: 140%; top: -55%; left: 12%; }
+    .cloud::after  { width: 45%; height: 120%; top: -38%; right: 14%; }
+
+    .cloud.c1 { width: 160px; height: 50px; top: 18%; animation-duration: 46s; }
+    .cloud.c2 { width: 110px; height: 36px; top: 38%; opacity: 0.75; animation-duration: 60s; animation-delay: -12s; }
+    .cloud.c3 { width: 200px; height: 60px; top: 62%; opacity: 0.6;  animation-duration: 75s; animation-delay: -30s; }
+
+    @keyframes drift {
+      from { transform: translateX(-260px); }
+      to   { transform: translateX(110vw); }
+    }
+
+    /* ---- Chat shell ---- */
+    .app {
+      position: relative;
+      z-index: 1;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      max-width: 680px;
+      margin: 0 auto;
+      padding: 16px;
+    }
+
+    header {
+      text-align: center;
+      padding: 14px 18px;
+      margin-bottom: 12px;
+      background: rgba(255, 255, 255, 0.55);
+      backdrop-filter: blur(8px);
+      border-radius: 22px;
+      box-shadow: 0 8px 30px rgba(43, 47, 69, 0.12);
+    }
+    header h1 { margin: 0; font-size: 1.4rem; letter-spacing: 0.3px; }
+    header p  { margin: 4px 0 0; font-size: 0.85rem; color: var(--muted); }
+
+    /* ---- Mascot: שמאי החזאי ---- */
+    .mascot {
+      width: 92px; height: 92px;
+      margin: 0 auto 2px;
+      animation: bob 4s ease-in-out infinite;
+    }
+    .mascot svg, .avatar svg { width: 100%; height: 100%; display: block; }
+    @keyframes bob {
+      0%, 100% { transform: translateY(0); }
+      50%      { transform: translateY(-6px); }
+    }
+    .row.bot .avatar { background: linear-gradient(160deg, #d4ecff, #eef6ff); padding: 3px; }
+
+    #messages {
+      flex: 1;
+      overflow-y: auto;
+      padding: 6px 4px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .row { display: flex; align-items: flex-end; gap: 8px; }
+    .row.user { flex-direction: row-reverse; }
+
+    .avatar {
+      flex: 0 0 auto;
+      width: 38px; height: 38px;
+      border-radius: 50%;
+      display: grid; place-items: center;
+      font-size: 1.2rem;
+      background: rgba(255, 255, 255, 0.85);
+      box-shadow: 0 4px 14px rgba(43, 47, 69, 0.14);
+    }
+
+    .bubble {
+      max-width: 78%;
+      padding: 11px 15px;
+      border-radius: 20px;
+      line-height: 1.5;
+      font-size: 0.97rem;
+      white-space: pre-wrap;
+      word-wrap: break-word;
+      box-shadow: 0 6px 20px rgba(43, 47, 69, 0.12);
+      animation: pop 0.25s ease;
+    }
+    @keyframes pop {
+      from { transform: translateY(6px) scale(0.98); opacity: 0; }
+      to   { transform: none; opacity: 1; }
+    }
+
+    .bot .bubble  { background: var(--bot-bg); border-bottom-inline-start-radius: 6px; }
+    .user .bubble { background: var(--user-bg); color: #fff; border-bottom-inline-end-radius: 6px; }
+
+    .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+    .chip {
+      font-size: 0.74rem;
+      padding: 3px 9px;
+      border-radius: 999px;
+      background: var(--chip);
+      color: var(--chip-ink);
+      font-weight: 600;
+    }
+
+    /* ---- Typing indicator ---- */
+    .typing { display: inline-flex; gap: 4px; padding: 4px 2px; }
+    .typing span {
+      width: 7px; height: 7px;
+      border-radius: 50%;
+      background: var(--muted);
+      animation: blink 1.2s infinite ease-in-out;
+    }
+    .typing span:nth-child(2) { animation-delay: 0.2s; }
+    .typing span:nth-child(3) { animation-delay: 0.4s; }
+    @keyframes blink {
+      0%, 80%, 100% { transform: scale(0.6); opacity: 0.4; }
+      40%           { transform: scale(1);   opacity: 1; }
+    }
+
+    /* ---- Composer ---- */
+    .composer {
+      display: flex;
+      gap: 8px;
+      margin-top: 12px;
+      padding: 8px;
+      background: rgba(255, 255, 255, 0.7);
+      backdrop-filter: blur(8px);
+      border-radius: 22px;
+      box-shadow: 0 8px 30px rgba(43, 47, 69, 0.14);
+    }
+    #input {
+      flex: 1;
+      border: none;
+      outline: none;
+      background: transparent;
+      font: inherit;
+      padding: 10px 14px;
+      color: var(--ink);
+    }
+    #send {
+      flex: 0 0 auto;
+      width: 46px; height: 46px;
+      border: none;
+      border-radius: 50%;
+      cursor: pointer;
+      font-size: 1.2rem;
+      color: #fff;
+      background: linear-gradient(135deg, #5b8def, #6f6ff0);
+      box-shadow: 0 6px 16px rgba(91, 141, 239, 0.5);
+      transition: transform 0.12s ease;
+    }
+    #send:hover:not(:disabled) { transform: scale(1.08); }
+    #send:disabled { opacity: 0.5; cursor: default; }
+  </style>
+</head>
+<body>
+  <div class="sun"></div>
+  <div class="cloud c1"></div>
+  <div class="cloud c2"></div>
+  <div class="cloud c3"></div>
+
+  <div class="app">
+    <header>
+      <div class="mascot" id="mascot"></div>
+      <h1>שמאי החזאי</h1>
+      <p>החזאי הכי עליז · שאלו על מזג האוויר בישראל או בארה"ב · Ask in English too</p>
+    </header>
+
+    <div id="messages"></div>
+
+    <form class="composer" id="form">
+      <input id="input" autocomplete="off"
+             placeholder="מה מזג האוויר בחיפה?" />
+      <button id="send" type="submit" title="שליחה">➤</button>
+    </form>
+  </div>
+
+  <script>
+    const messages = document.getElementById("messages");
+    const form = document.getElementById("form");
+    const input = document.getElementById("input");
+    const send = document.getElementById("send");
+
+    // שמאי החזאי — a cheerful cloud with a peeking sun. Inline SVG so the page
+    // stays fully self-contained (no external images). Reused in header + avatars.
+    const MASCOT_SVG = `
+      <svg viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+        <!-- sun peeking from behind, top-right -->
+        <g>
+          <g stroke="#ffc83d" stroke-width="4" stroke-linecap="round">
+            <line x1="92" y1="6"  x2="92" y2="15"/>
+            <line x1="112" y1="14" x2="106" y2="20"/>
+            <line x1="119" y1="32" x2="110" y2="32"/>
+            <line x1="112" y1="50" x2="106" y2="44"/>
+            <line x1="72" y1="13" x2="78" y2="19"/>
+          </g>
+          <circle cx="92" cy="32" r="15" fill="#ffd64d"/>
+        </g>
+        <!-- cloud body -->
+        <g fill="#ffffff">
+          <ellipse cx="60" cy="78" rx="46" ry="20"/>
+          <circle cx="38" cy="66" r="19"/>
+          <circle cx="62" cy="56" r="25"/>
+          <circle cx="86" cy="68" r="18"/>
+        </g>
+        <!-- cheeks -->
+        <circle cx="46" cy="74" r="6" fill="#ffb3c1" opacity="0.85"/>
+        <circle cx="80" cy="72" r="6" fill="#ffb3c1" opacity="0.85"/>
+        <!-- eyes -->
+        <circle cx="53" cy="64" r="5" fill="#2b2f45"/>
+        <circle cx="73" cy="62" r="5" fill="#2b2f45"/>
+        <circle cx="54.7" cy="62.3" r="1.7" fill="#fff"/>
+        <circle cx="74.7" cy="60.3" r="1.7" fill="#fff"/>
+        <!-- happy smile -->
+        <path d="M52 73 Q63 83 74 71" stroke="#2b2f45" stroke-width="3.2"
+              fill="none" stroke-linecap="round"/>
+      </svg>`;
+
+    document.getElementById("mascot").innerHTML = MASCOT_SVG;
+
+    // Hebrew block → RTL, otherwise LTR. Applied per bubble for bilingual chat.
+    const dirFor = (text) => (/[֐-׿]/.test(text) ? "rtl" : "ltr");
+
+    // Map an exposed MCP tool name to a friendly chip label.
+    function chipLabel(name) {
+      const flag = name.startsWith("weather_Israel") ? "🇮🇱"
+                 : name.startsWith("weather_USA")    ? "🇺🇸"
+                 : "🔧";
+      const tool = name.includes("__") ? name.split("__")[1] : name;
+      return `${flag} ${tool}`;
+    }
+
+    function addMessage(role, text, toolCalls) {
+      const row = document.createElement("div");
+      row.className = `row ${role}`;
+
+      const avatar = document.createElement("div");
+      avatar.className = "avatar";
+      if (role === "user") avatar.textContent = "🧑";
+      else avatar.innerHTML = MASCOT_SVG;
+
+      const wrap = document.createElement("div");
+
+      const bubble = document.createElement("div");
+      bubble.className = "bubble";
+      bubble.dir = dirFor(text || "");
+      bubble.textContent = text;
+      wrap.appendChild(bubble);
+
+      if (toolCalls && toolCalls.length) {
+        const chips = document.createElement("div");
+        chips.className = "chips";
+        for (const call of toolCalls) {
+          const chip = document.createElement("span");
+          chip.className = "chip";
+          chip.textContent = chipLabel(call.name);
+          chips.appendChild(chip);
+        }
+        wrap.appendChild(chips);
+      }
+
+      row.append(avatar, wrap);
+      messages.appendChild(row);
+      messages.scrollTop = messages.scrollHeight;
+      return row;
+    }
+
+    function addTyping() {
+      const row = document.createElement("div");
+      row.className = "row bot";
+      row.innerHTML =
+        '<div class="avatar">' + MASCOT_SVG + '</div>' +
+        '<div class="bubble"><div class="typing"><span></span><span></span><span></span></div></div>';
+      messages.appendChild(row);
+      messages.scrollTop = messages.scrollHeight;
+      return row;
+    }
+
+    async function sendMessage(text) {
+      addMessage("user", text);
+      input.value = "";
+      send.disabled = true;
+      const typing = addTyping();
+
+      try {
+        const res = await fetch("/chat", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ message: text }),
+        });
+        const data = await res.json();
+        typing.remove();
+        if (!res.ok) {
+          addMessage("bot", "אופס, משהו השתבש: " + (data.detail || res.status));
+        } else {
+          addMessage("bot", data.answer || "(אין תשובה)", data.tool_calls);
+        }
+      } catch (err) {
+        typing.remove();
+        addMessage("bot", "שגיאת רשת: " + err.message);
+      } finally {
+        send.disabled = false;
+        input.focus();
+      }
+    }
+
+    form.addEventListener("submit", (e) => {
+      e.preventDefault();
+      const text = input.value.trim();
+      if (text) sendMessage(text);
+    });
+
+    // Friendly greeting on load.
+    addMessage("bot", "שלום! אני שמאי החזאי ☀️ ספרו לי על איזו עיר תרצו תחזית.");
+    input.focus();
+  </script>
+</body>
+</html>
